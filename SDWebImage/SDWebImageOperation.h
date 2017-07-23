@@ -6,10 +6,12 @@
  * file that was distributed with this source code.
  */
 
+//协议
 #import <Foundation/Foundation.h>
 
 @protocol SDWebImageOperation <NSObject>
 
+//取消operation
 - (void)cancel;
 
 @end

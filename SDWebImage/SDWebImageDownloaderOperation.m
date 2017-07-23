@@ -25,6 +25,10 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 
 @interface SDWebImageDownloaderOperation ()
 
+
+/**
+ key是图片的URL value是一个数组 包含每个图片的多组回调信息
+ */
 @property (strong, nonatomic, nonnull) NSMutableArray<SDCallbacksDictionary *> *callbackBlocks;
 
 @property (assign, nonatomic, getter = isExecuting) BOOL executing;
@@ -48,9 +52,9 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
 @end
 
 @implementation SDWebImageDownloaderOperation {
-    size_t width, height;
+    size_t width, height;  //图片的宽高
 #if SD_UIKIT || SD_WATCH
-    UIImageOrientation orientation;
+    UIImageOrientation orientation;  //图片的方向
 #endif
 }
 
@@ -87,6 +91,8 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     SDCallbacksDictionary *callbacks = [NSMutableDictionary new];
     if (progressBlock) callbacks[kProgressCallbackKey] = [progressBlock copy];
     if (completedBlock) callbacks[kCompletedCallbackKey] = [completedBlock copy];
+    
+    //因为可能同时下载多张图片 所以就可能出现多个线程同时访问 callbackBlocks 属性的情况, 为了保证线程安全, 所以这里使用了 dispatch_barrier_sync 来分步执行添加到barrierQueue 中的任务, 这样就能保证同一时间只有一个线程能对callbackBlocks进行操作
     dispatch_barrier_async(self.barrierQueue, ^{
         [self.callbackBlocks addObject:callbacks];
     });
@@ -117,6 +123,10 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
     return shouldCancel;
 }
 
+
+/**
+ 当创建的SDWebImageDownloaderOperation 对象被加入到downloader的 downloadQueue中时, 该对象的 start 方法就会被自动调用
+ */
 - (void)start {
     @synchronized (self) {
         if (self.isCancelled) {
@@ -143,6 +153,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
             }];
         }
 #endif
+        //创建用来下载图片数据的 NSURLSession
         NSURLSession *session = self.unownedSession;
         if (!self.unownedSession) {
             NSURLSessionConfiguration *sessionConfig = [NSURLSessionConfiguration defaultSessionConfiguration];
@@ -170,6 +181,7 @@ typedef NSMutableDictionary<NSString *, id> SDCallbacksDictionary;
             progressBlock(0, NSURLResponseUnknownLength, self.request.URL);
         }
         dispatch_async(dispatch_get_main_queue(), ^{
+            //发出开始下载图片的 通知
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadStartNotification object:self];
         });
     } else {
@@ -257,16 +269,18 @@ didReceiveResponse:(NSURLResponse *)response
     
     //'304 Not Modified' is an exceptional one
     if (![response respondsToSelector:@selector(statusCode)] || (((NSHTTPURLResponse *)response).statusCode < 400 && ((NSHTTPURLResponse *)response).statusCode != 304)) {
+        // 1. 获取 expectedSize 回调progressBlock
         NSInteger expected = (NSInteger)response.expectedContentLength;
         expected = expected > 0 ? expected : 0;
         self.expectedSize = expected;
         for (SDWebImageDownloaderProgressBlock progressBlock in [self callbacksForKey:kProgressCallbackKey]) {
             progressBlock(0, expected, self.request.URL);
         }
-        
+        //2. 初始化 imageData 属性
         self.imageData = [[NSMutableData alloc] initWithCapacity:expected];
         self.response = response;
         dispatch_async(dispatch_get_main_queue(), ^{
+            //3. 发送通知
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadReceiveResponseNotification object:self];
         });
     }
@@ -276,11 +290,14 @@ didReceiveResponse:(NSURLResponse *)response
         //This is the case when server returns '304 Not Modified'. It means that remote image is not changed.
         //In case of 304 we need just cancel the operation and return cached image from the cache.
         if (code == 304) {
+            // 针对 304 Not Modified 做处理 直接cancel operation 并返回缓存的 image
             [self cancelInternal];
         } else {
+            //取消连接
             [self.dataTask cancel];
         }
         dispatch_async(dispatch_get_main_queue(), ^{
+            //发送 停止 通知
             [[NSNotificationCenter defaultCenter] postNotificationName:SDWebImageDownloadStopNotification object:self];
         });
         
@@ -295,6 +312,8 @@ didReceiveResponse:(NSURLResponse *)response
 }
 
 - (void)URLSession:(NSURLSession *)session dataTask:(NSURLSessionDataTask *)dataTask didReceiveData:(NSData *)data {
+    
+    //1. 拼接图片数据
     [self.imageData appendData:data];
 
     if ((self.options & SDWebImageDownloaderProgressiveDownload) && self.expectedSize > 0) {
@@ -305,8 +324,10 @@ didReceiveResponse:(NSURLResponse *)response
         const NSInteger totalSize = self.imageData.length;
 
         // Update the data source, we must pass ALL the data, not just the new bytes
+        // 根据更新的 imageData 创建 CGImageSourceRef 对象
         CGImageSourceRef imageSource = CGImageSourceCreateWithData((__bridge CFDataRef)self.imageData, NULL);
 
+        // 首次获取到数据时 读取图片属性: width height orientation
         if (width + height == 0) {
             CFDictionaryRef properties = CGImageSourceCopyPropertiesAtIndex(imageSource, 0, NULL);
             if (properties) {
@@ -329,6 +350,7 @@ didReceiveResponse:(NSURLResponse *)response
             }
         }
 
+        // 图片还没下载完, 但不是第一次拿到数据,使用现有图片数据 CGImageSourceRed 创建CGImageRef
         if (width + height > 0 && totalSize < self.expectedSize) {
             // Create the image
             CGImageRef partialImageRef = CGImageSourceCreateImageAtIndex(imageSource, 0, NULL);
@@ -352,7 +374,7 @@ didReceiveResponse:(NSURLResponse *)response
                 }
             }
 #endif
-
+            // 对图片进行缩放, 解码, 回调 completedBlock
             if (partialImageRef) {
 #if SD_UIKIT || SD_WATCH
                 UIImage *image = [UIImage imageWithCGImage:partialImageRef scale:1 orientation:orientation];

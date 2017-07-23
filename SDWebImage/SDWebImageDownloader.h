@@ -6,10 +6,14 @@
  * file that was distributed with this source code.
  */
 
+//专门用来下载图片和优化图片加载的 跟缓存没有关系
+
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 #import "SDWebImageOperation.h"
 
+//下载选项
 typedef NS_OPTIONS(NSUInteger, SDWebImageDownloaderOptions) {
     SDWebImageDownloaderLowPriority = 1 << 0,
     SDWebImageDownloaderProgressiveDownload = 1 << 1,
@@ -55,17 +59,17 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageDownloaderOptions) {
      */
     SDWebImageDownloaderScaleDownLargeImages = 1 << 8,
 };
-
+//下载任务执行顺序
 typedef NS_ENUM(NSInteger, SDWebImageDownloaderExecutionOrder) {
     /**
      * Default value. All download operations will execute in queue style (first-in-first-out).
      */
-    SDWebImageDownloaderFIFOExecutionOrder,
+    SDWebImageDownloaderFIFOExecutionOrder,  //先进先出
 
     /**
      * All download operations will execute in stack style (last-in-first-out).
      */
-    SDWebImageDownloaderLIFOExecutionOrder
+    SDWebImageDownloaderLIFOExecutionOrder   //后进先出
 };
 
 extern NSString * _Nonnull const SDWebImageDownloadStartNotification;
@@ -93,6 +97,8 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
 
 /**
  * Asynchronous downloader dedicated and optimized for image loading.
+ 
+ 使用 SDWebImageDownloader 来下载图片，但是图片内容不会缓存
  */
 @interface SDWebImageDownloader : NSObject
 
@@ -100,7 +106,7 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
  * Decompressing images that are downloaded and cached can improve performance but can consume lot of memory.
  * Defaults to YES. Set this to NO if you are experiencing a crash due to excessive memory consumption.
  */
-@property (assign, nonatomic) BOOL shouldDecompressImages;
+@property (assign, nonatomic) BOOL shouldDecompressImages;  //下载完成后是否需要解压缩图片  默认为YES
 
 /**
  *  The maximum number of concurrent downloads
@@ -184,6 +190,8 @@ typedef SDHTTPHeadersDictionary * _Nullable (^SDWebImageDownloaderHeadersFilterB
  * @param operationClass The subclass of `SDWebImageDownloaderOperation` to set 
  *        as default. Passing `nil` will revert to `SDWebImageDownloaderOperation`.
  */
+
+//创建operation用的类
 - (void)setOperationClass:(nullable Class)operationClass;
 
 /**

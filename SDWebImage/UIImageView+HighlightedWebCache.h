@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+//跟UIImageView+WebCache类似 也是包装了SDWebImageManager 只不过是用于加载highlighted状态的图片
+
 #import "SDWebImageCompat.h"
 
 #if SD_UIKIT

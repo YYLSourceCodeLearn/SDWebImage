@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+// 预下载图片 方便后续使用 图片下载的优先级低 其内部由SDWebImageManager 来处理图片下载和缓存
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageManager.h"
 

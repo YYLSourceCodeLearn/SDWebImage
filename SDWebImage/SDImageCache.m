@@ -15,6 +15,11 @@
 #import "NSImage+WebCache.h"
 
 // See https://github.com/rs/SDWebImage/pull/1141 for discussion
+
+// NSCache 是一个类似于 NSMutableDictionary 存储 key-value的容器, 主要有以下几个特点
+//1. 自动删除机制: 当系统内存紧张时, NSCahce会自动删除一些缓存对象
+//2. 线程安全: 从不同线程中对同一个 NSCache 对象进行增删改查时 不需要加锁
+//3. 不同于 NSMUtableDictionary, NSCache 存储对象时不会对key进行copy操作
 @interface AutoPurgeCache : NSCache
 @end
 
@@ -52,6 +57,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 #pragma mark - Properties
 @property (strong, nonatomic, nonnull) NSCache *memCache;
 @property (strong, nonatomic, nonnull) NSString *diskCachePath;
+//只读路径, 比如bundle中的文件路径, 用来在SDWebImage 下载,读取缓存之前预加载用的
 @property (strong, nonatomic, nullable) NSMutableArray<NSString *> *customPaths;
 @property (SDDispatchQueueSetterSementics, nonatomic, nullable) dispatch_queue_t ioQueue;
 
@@ -78,6 +84,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (nonnull instancetype)initWithNamespace:(nonnull NSString *)ns {
+    // 初始化缓存目录路径
     NSString *path = [self makeDiskCachePath:ns];
     return [self initWithNamespace:ns diskCacheDirectory:path];
 }
@@ -85,6 +92,10 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 - (nonnull instancetype)initWithNamespace:(nonnull NSString *)ns
                        diskCacheDirectory:(nonnull NSString *)directory {
     if ((self = [super init])) {
+        
+        //初始化实例变量, 属性, 设置属性默认值, 并根据namesoace 设置完整的缓存目录路径
+        
+        
         NSString *fullNamespace = [@"com.hackemist.SDWebImageCache." stringByAppendingString:ns];
         
         // Create IO serial queue
@@ -109,6 +120,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         });
 
 #if SD_UIKIT
+        
+        // 添加通知观察者, 用于内存紧张时清空内存缓存, 以及程序终止运行时和程序退到后台时清扫磁盘缓存
         // Subscribe to app events
         [[NSNotificationCenter defaultCenter] addObserver:self
                                                  selector:@selector(clearMemory)
@@ -164,6 +177,8 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return [self cachePathForKey:key inPath:self.diskCachePath];
 }
 
+// 图片数据存储到磁盘(沙盒)时, 需要提供一个包含文件名的路径, 这个文件名是一个对key 进行MD5处理后生成的字符串
+
 - (nullable NSString *)cachedFileNameForKey:(nullable NSString *)key {
     const char *str = key.UTF8String;
     if (str == NULL) {
@@ -184,6 +199,9 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 #pragma mark - Store Ops
+
+//  写入缓存
+// 在存储缓存数据时,先计算图片像素大小, 并存储到内存缓存中去, 如果需要存到磁盘(沙盒)中, 就开启异步线程将图片的二进制数据存储到磁盘(沙盒)中
 
 - (void)storeImage:(nullable UIImage *)image
             forKey:(nullable NSString *)key
@@ -209,17 +227,22 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         }
         return;
     }
+    //添加内存缓存
     // if memory cache is enabled
     if (self.config.shouldCacheImagesInMemory) {
+        // 计算图片像素的大小
         NSUInteger cost = SDCacheCostForImage(image);
+        //将image存入memCache中
         [self.memCache setObject:image forKey:key cost:cost];
     }
     
+    //将图片异步存入磁盘中
     if (toDisk) {
         dispatch_async(self.ioQueue, ^{
             @autoreleasepool {
                 NSData *data = imageData;
                 if (!data && image) {
+                    //根据image的格式将图片转换成对应的二进制NSDate
                     SDImageFormat imageFormatFromData = [NSData sd_imageFormatForImageData:data];
                     data = [image sd_imageDataAsFormat:imageFormatFromData];
                 }                
@@ -246,6 +269,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     
     [self checkIfQueueIsIOQueue];
     
+    // 借助NSFileManager 将图片二进制数据存储到沙盒, 存储的文件名 是对key进行MD5 处理后生成的字符串
     if (![_fileManager fileExistsAtPath:_diskCachePath]) {
         [_fileManager createDirectoryAtPath:_diskCachePath withIntermediateDirectories:YES attributes:nil error:NULL];
     }
@@ -284,6 +308,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
 }
 
 - (nullable UIImage *)imageFromMemoryCacheForKey:(nullable NSString *)key {
+    // 从 memCache 中读取缓存数据
     return [self.memCache objectForKey:key];
 }
 
@@ -361,6 +386,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     return SDScaledImageForKey(key, image);
 }
 
+// 读取缓存
 - (nullable NSOperation *)queryCacheOperationForKey:(nullable NSString *)key done:(nullable SDCacheQueryCompletedBlock)doneBlock {
     if (!key) {
         if (doneBlock) {
@@ -370,6 +396,9 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
     }
 
     // First check the in-memory cache...
+    //先拿图片缓存的 key （这个 key 默认是图片 URL）去 SDImageCache 单例中读取内存缓存，如果有，就返回给 SDWebImageManager
+    
+    //从内存缓存中取
     UIImage *image = [self imageFromMemoryCacheForKey:key];
     if (image) {
         NSData *diskData = nil;
@@ -382,6 +411,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         return nil;
     }
 
+    //如果内存缓存中没有找到对应的图片, 就开启异步队列, 调用 -diskImageForKey 读取磁盘缓存,读取成功之后,再保存到内存缓存, 最后再回到主队列,回调done
     NSOperation *operation = [NSOperation new];
     dispatch_async(self.ioQueue, ^{
         if (operation.isCancelled) {
@@ -390,6 +420,7 @@ FOUNDATION_STATIC_INLINE NSUInteger SDCacheCostForImage(UIImage *image) {
         }
 
         @autoreleasepool {
+//            如果内存缓存没有，就开启异步线程，拿经过 MD5 处理的 key 去读取磁盘缓存，如果找到磁盘缓存了，就同步到内存缓存中去，然后再返回给 SDWebImageManager
             NSData *diskData = [self diskImageDataBySearchingAllPathsForKey:key];
             UIImage *diskImage = [self diskImageForKey:key];
             if (diskImage && self.config.shouldCacheImagesInMemory) {

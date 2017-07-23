@@ -7,6 +7,8 @@
  * file that was distributed with this source code.
  */
 
+//用于获取图片的数据格式 (JPEG, PNG等)
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 

@@ -11,6 +11,9 @@
 #import "SDWebImageDownloader.h"
 #import "SDImageCache.h"
 
+// UIIMageView+WebCache 背后的默默付出者 主要功能是将图片下载 (SDWebImageDownload)和图片缓存(SDImageCache)两个独立的功能组合起来
+
+
 typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
     /**
      * By default, when a URL fail to be downloaded, the URL is blacklisted so the library won't keep trying.
@@ -42,6 +45,8 @@ typedef NS_OPTIONS(NSUInteger, SDWebImageOptions) {
      * If a cached image is refreshed, the completion block is called once with the cached image and again with the final image.
      *
      * Use this flag only if you can't make your URLs static with embedded cache busting parameter.
+     
+     虽然会降低性能，但是下载图片时会照顾到服务器返回的 caching control
      */
     SDWebImageRefreshCached = 1 << 4,
 
@@ -155,12 +160,18 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
                 }];
 
  * @endcode
+ 
+ SDWebImageManager将图片下载和图片缓存组合起来了。SDWebImageManager也可以单独使用。
+ 
  */
 @interface SDWebImageManager : NSObject
 
 @property (weak, nonatomic, nullable) id <SDWebImageManagerDelegate> delegate;
 
+//缓存器
 @property (strong, nonatomic, readonly, nullable) SDImageCache *imageCache;
+
+//下载器
 @property (strong, nonatomic, readonly, nullable) SDWebImageDownloader *imageDownloader;
 
 /**
@@ -178,6 +189,15 @@ SDWebImageManager *manager = [SDWebImageManager sharedManager];
 }];
 
  * @endcode
+ */
+
+/**
+ 自定义缓存 key
+ 有时候，一张图片的 URL 中的一部分可能是动态变化的（比如获取权限上的限制），所以我们只需要把 URL 中不变的部分作为缓存用的 key。
+ SDWebImageManager.sharedManager.cacheKeyFilter = ^(NSURL *url) {
+ url = [[NSURL alloc] initWithScheme:url.scheme host:url.host path:url.path];
+ return [url absoluteString];
+ };
  */
 @property (nonatomic, copy, nullable) SDWebImageCacheKeyFilterBlock cacheKeyFilter;
 

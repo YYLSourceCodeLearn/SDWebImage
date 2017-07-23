@@ -16,7 +16,10 @@
 
 @interface SDWebImageDownloader () <NSURLSessionTaskDelegate, NSURLSessionDataDelegate>
 
+//图片下载任务是放在这个NSOperationQueue任务队列中来管理的
 @property (strong, nonatomic, nonnull) NSOperationQueue *downloadQueue;
+
+
 @property (weak, nonatomic, nullable) NSOperation *lastAddedOperation;
 @property (assign, nonatomic, nullable) Class operationClass;
 @property (strong, nonatomic, nonnull) NSMutableDictionary<NSURL *, SDWebImageDownloaderOperation *> *URLOperations;
@@ -34,6 +37,9 @@
 + (void)initialize {
     // Bind SDNetworkActivityIndicator if available (download it here: http://github.com/rs/SDNetworkActivityIndicator )
     // To use it, just add #import "SDNetworkActivityIndicator.h" in addition to the SDWebImage import
+    
+    
+//    通过注册通知 让SDNetworkActivityIndicator 监听下载事件，来显示和隐藏状态栏上的 network activity indicator。为了让 SDNetworkActivityIndicator 文件可以不用导入项目中来（如果不要的话），这里使用了 runtime 的方式来实现动态创建类以及调用方法
     if (NSClassFromString(@"SDNetworkActivityIndicator")) {
 
 #pragma clang diagnostic push
@@ -54,6 +60,12 @@
     }
 }
 
+
+/**
+ 创建单例
+
+ @return return value description
+ */
 + (nonnull instancetype)sharedDownloader {
     static dispatch_once_t once;
     static id instance;
@@ -71,17 +83,22 @@
     if ((self = [super init])) {
         _operationClass = [SDWebImageDownloaderOperation class];
         _shouldDecompressImages = YES;
+        //设置下载operation的默认执行顺序(先进先出 还是先进后出)
         _executionOrder = SDWebImageDownloaderFIFOExecutionOrder;
+        //初始化_downloadQueue(下载队列) _URLCallbacks(下载回调block的容器)  _barrierQueue(GCD队列)
         _downloadQueue = [NSOperationQueue new];
-        _downloadQueue.maxConcurrentOperationCount = 6;
+        _downloadQueue.maxConcurrentOperationCount = 6;  //设置_downloadQueue的队列最大并发数 默认值为6
         _downloadQueue.name = @"com.hackemist.SDWebImageDownloader";
         _URLOperations = [NSMutableDictionary new];
+        
+        //设置_HTTPHeaders 默认值
 #ifdef SD_WEBP
         _HTTPHeaders = [@{@"Accept": @"image/webp,image/*;q=0.8"} mutableCopy];
 #else
         _HTTPHeaders = [@{@"Accept": @"image/*;q=0.8"} mutableCopy];
 #endif
         _barrierQueue = dispatch_queue_create("com.hackemist.SDWebImageDownloaderBarrierQueue", DISPATCH_QUEUE_CONCURRENT);
+        //设置默认下载超时时长 15s
         _downloadTimeout = 15.0;
 
         sessionConfiguration.timeoutIntervalForRequest = _downloadTimeout;
@@ -162,6 +179,8 @@
             }
         }
         
+        //先将传入的 progressBlock 和 completedBlock 保存起来，并在第一次下载该 URL 的图片时，创建一个 NSMutableURLRequest 对象和一个 SDWebImageDownloaderOperation 对象，并将该 SDWebImageDownloaderOperation 对象添加到 SDWebImageDownloader 的downloadQueue 来启动异步下载任务
+        
         NSMutableURLRequest *request = [[NSMutableURLRequest alloc] initWithURL:url cachePolicy:cachePolicy timeoutInterval:timeoutInterval];
         
         request.HTTPShouldHandleCookies = (options & SDWebImageDownloaderHandleCookies);
@@ -208,11 +227,25 @@
     });
 }
 
+
+/**
+ 保存每个URL对应的回调block
+
+ @param progressBlock progressBlock description
+ @param completedBlock completedBlock description
+ @param url url description
+ @param createCallback createCallback description
+ @return return value description
+ */
 - (nullable SDWebImageDownloadToken *)addProgressCallback:(SDWebImageDownloaderProgressBlock)progressBlock
                                            completedBlock:(SDWebImageDownloaderCompletedBlock)completedBlock
                                                    forURL:(nullable NSURL *)url
                                            createCallback:(SDWebImageDownloaderOperation *(^)())createCallback {
     // The URL will be used as the key to the callbacks dictionary so it cannot be nil. If it is nil immediately call the completed block with no image or data.
+    
+    //先进行错误检查 判断URL是否为空 然后再将URL对应的 progressBlock和completedBlock保存到URLCallbacks属性中去
+    //1. 判断url是否 nil, 如果为 nil 则直接回调completedBlock, 返回失败的结果, 然后 return, 因为 url会作为存储callbacks的key
+    
     if (url == nil) {
         if (completedBlock != nil) {
             completedBlock(nil, nil, nil, NO);
@@ -222,6 +255,8 @@
 
     __block SDWebImageDownloadToken *token = nil;
 
+    //该 SDWebImageDownloaderOperation 对象添加到 SDWebImageDownloader 的downloadQueue 来启动异步下载任务
+    //2. 处理同一个URL的多次下载请求(MARK: 使用dispatch_barrier_sync 函数来保证同一时间只有一个线程能对URLOperations操作)
     dispatch_barrier_sync(self.barrierQueue, ^{
         SDWebImageDownloaderOperation *operation = self.URLOperations[url];
         if (!operation) {
@@ -237,6 +272,7 @@
               };
             };
         }
+        //将传入的 progressBlock 和 completedBlock 保存起来
         id downloadOperationCancelToken = [operation addHandlersForProgress:progressBlock completed:completedBlock];
 
         token = [SDWebImageDownloadToken new];

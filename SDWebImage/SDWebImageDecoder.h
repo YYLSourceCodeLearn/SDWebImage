@@ -7,6 +7,8 @@
  * file that was distributed with this source code.
  */
 
+// 图片解码器, 用于图片下载完成后进行解码
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 

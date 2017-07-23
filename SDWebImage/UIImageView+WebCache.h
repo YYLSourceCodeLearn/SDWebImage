@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+// 集成SDWebImageManager 的图片下载和缓存到UIImageView的方法中,方便调用方的简单使用
+
 #import "SDWebImageCompat.h"
 
 #if SD_UIKIT || SD_MAC
@@ -44,6 +46,13 @@
 }
 
  * @endcode
+ 
+ 加载图片时，如何添加默认的 progress indicator?
+ 在调用 -sd_setImageWithURL:方法之前，先调用下面的方法：
+ [imageView sd_setShowActivityIndicatorView:YES];
+ [imageView sd_setIndicatorStyle:UIActivityIndicatorViewStyleGray];
+ 
+ 
  */
 @interface UIImageView (WebCache)
 
@@ -92,6 +101,9 @@
  *                       is nil and the second parameter may contain an NSError. The third parameter is a Boolean
  *                       indicating if the image was retrieved from the local cache or from the network.
  *                       The fourth parameter is the original image url.
+ 
+ 如果你在图片加载完成前取消了请求操作，就不会收到成功或失败的回调
+ 
  */
 - (void)sd_setImageWithURL:(nullable NSURL *)url
                  completed:(nullable SDExternalCompletionBlock)completedBlock;

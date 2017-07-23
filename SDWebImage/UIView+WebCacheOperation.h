@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+// 用来记录图片加载的operation 方便需要时取消和移除图片加载的operation
+
 #import "SDWebImageCompat.h"
 
 #if SD_UIKIT || SD_MAC

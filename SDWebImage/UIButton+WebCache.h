@@ -6,6 +6,9 @@
  * file that was distributed with this source code.
  */
 
+
+//跟UIImageView+WebCache类似 集成SDWebImageManager的图片下载和缓存功能到UIButton的方法中, 方便调用方的简单使用
+
 #import "SDWebImageCompat.h"
 
 #if SD_UIKIT

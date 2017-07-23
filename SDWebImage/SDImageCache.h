@@ -6,6 +6,22 @@
  * file that was distributed with this source code.
  */
 
+// 用来处理内存缓存和磁盘缓存(可选)的 其中磁盘缓存是异步进行的 因此不会阻塞主线程
+
+// 为什么需要缓存:
+// 1. 以空间换时间, 提升用户体验, 加载同一张图片, 读取缓存肯定比远程下载的速度快得多
+// 2. 减少不必要的网络请求, 提升性能,节省流量, 同一张图片的URL是不会经常变化的, 所以没必要重复下载. 名外,现在的手机存储空间都比较大, 相对于流量来,缓存占的那点空间不算什么
+
+// SImageCache 管理着一个内存缓存和磁盘缓存(可选), 同时在写入磁盘缓存时采取异步执行, 所以不会阻塞主线程, 影响用户体验
+
+
+//从读取速度和保存时间上来考虑，缓存该怎么存？key 怎么定？
+//内存缓存怎么存？
+//磁盘缓存怎么存？路径、文件名怎么定？
+//使用时怎么读取缓存？
+//什么时候需要移除缓存？怎么移除？
+
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageCompat.h"
 #import "SDImageCacheConfig.h"
@@ -14,15 +30,15 @@ typedef NS_ENUM(NSInteger, SDImageCacheType) {
     /**
      * The image wasn't available the SDWebImage caches, but was downloaded from the web.
      */
-    SDImageCacheTypeNone,
+    SDImageCacheTypeNone, //没有读取到图片缓存, 需要从网上下载
     /**
      * The image was obtained from the disk cache.
      */
-    SDImageCacheTypeDisk,
+    SDImageCacheTypeDisk, //磁盘中的缓存
     /**
      * The image was obtained from the memory cache.
      */
-    SDImageCacheTypeMemory
+    SDImageCacheTypeMemory //内存中的缓存
 };
 
 typedef void(^SDCacheQueryCompletedBlock)(UIImage * _Nullable image, NSData * _Nullable data, SDImageCacheType cacheType);
@@ -36,6 +52,13 @@ typedef void(^SDWebImageCalculateSizeBlock)(NSUInteger fileCount, NSUInteger tot
  * SDImageCache maintains a memory cache and an optional disk cache. Disk cache write operations are performed
  * asynchronous so it doesn’t add unnecessary latency to the UI.
  */
+
+
+/**
+ SDImageCache 支持内存缓存和异步的磁盘缓存（可选），如果你想单独使用 SDImageCache 来缓存数据的话，可以使用单例，也可以创建一个有独立命名空间的 SDImageCache 实例。
+ 
+ SDImageCache 的磁盘缓存是通过异步操作NSFileManager 存储缓存文件到沙盒来实现的
+ */
 @interface SDImageCache : NSObject
 
 #pragma mark - Properties
@@ -48,12 +71,12 @@ typedef void(^SDWebImageCalculateSizeBlock)(NSUInteger fileCount, NSUInteger tot
 /**
  * The maximum "total cost" of the in-memory image cache. The cost function is the number of pixels held in memory.
  */
-@property (assign, nonatomic) NSUInteger maxMemoryCost;
+@property (assign, nonatomic) NSUInteger maxMemoryCost; //其实就是 NSCache 的totalCostLimit 内存缓存总消耗的最大限制, cost是根据内存中的图片像素大小来计算的
 
 /**
  * The maximum number of objects the cache should hold.
  */
-@property (assign, nonatomic) NSUInteger maxMemoryCountLimit;
+@property (assign, nonatomic) NSUInteger maxMemoryCountLimit; //其实就是 NSCache 的countLimit 内存缓存的最大数目
 
 #pragma mark - Singleton and initialization
 
@@ -163,6 +186,10 @@ typedef void(^SDWebImageCalculateSizeBlock)(NSUInteger fileCount, NSUInteger tot
  * @param doneBlock The completion block. Will not get called if the operation is cancelled
  *
  * @return a NSOperation instance containing the cache op
+ */
+
+/**
+ 读取缓存，图片缓存的 key 是唯一的，通常就是图片的 absolute URL。
  */
 - (nullable NSOperation *)queryCacheOperationForKey:(nullable NSString *)key done:(nullable SDCacheQueryCompletedBlock)doneBlock;
 

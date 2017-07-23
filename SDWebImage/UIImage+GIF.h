@@ -7,6 +7,9 @@
  * file that was distributed with this source code.
  */
 
+//用于加载GIF动画
+
+
 #import "SDWebImageCompat.h"
 
 @interface UIImage (GIF)

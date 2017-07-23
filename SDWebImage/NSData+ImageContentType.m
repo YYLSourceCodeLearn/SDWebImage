@@ -12,6 +12,7 @@
 
 @implementation NSData (ImageContentType)
 
+// 按不同的图片格式来转换成对应的NSData对象, 图片格式怎么判断: 根据alpha通道以及图片数据的前8位字节来判断是不是PNG图片, 不是PNG的话就按照JPG来处理
 + (SDImageFormat)sd_imageFormatForImageData:(nullable NSData *)data {
     if (!data) {
         return SDImageFormatUndefined;

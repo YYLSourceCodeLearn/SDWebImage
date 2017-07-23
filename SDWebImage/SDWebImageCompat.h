@@ -7,6 +7,8 @@
  * file that was distributed with this source code.
  */
 
+//宏定义 常量  通用函数
+
 #import <TargetConditionals.h>
 
 #ifdef __OBJC_GC__

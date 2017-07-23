@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+// 用于解码并加载WebP 图片
+
 #ifdef SD_WEBP
 
 #import "SDWebImageCompat.h"

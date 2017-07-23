@@ -6,6 +6,8 @@
  * file that was distributed with this source code.
  */
 
+// 继承NSOption 用来处理下载任务的
+
 #import <Foundation/Foundation.h>
 #import "SDWebImageDownloader.h"
 #import "SDWebImageOperation.h"
@@ -43,6 +45,7 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
 /**
  * The request used by the operation's task.
  */
+// 用来给operation 中的connection使用请求
 @property (strong, nonatomic, readonly, nullable) NSURLRequest *request;
 
 /**
@@ -50,7 +53,7 @@ extern NSString * _Nonnull const SDWebImageDownloadFinishNotification;
  */
 @property (strong, nonatomic, readonly, nullable) NSURLSessionTask *dataTask;
 
-
+//下载完成后是否需要解压缩
 @property (assign, nonatomic) BOOL shouldDecompressImages;
 
 /**
