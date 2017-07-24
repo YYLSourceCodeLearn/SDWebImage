@@ -36,6 +36,8 @@
         _customImageView.clipsToBounds = YES;
         _customImageView.contentMode = UIViewContentModeScaleAspectFill;
     }
+    
+    
     return self;
 }
 
