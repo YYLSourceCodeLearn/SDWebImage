@@ -15,6 +15,7 @@
 #import <SDWebImage/UIView+WebCache.h>
 
 
+
 @interface MyCustomTableViewCell : UITableViewCell
 
 @property (nonatomic, strong) UILabel *customTextLabel;
